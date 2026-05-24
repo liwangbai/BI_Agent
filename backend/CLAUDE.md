@@ -60,5 +60,13 @@ pytest                               # 运行测试
 ## 数据库集成
 
 - 使用 SQLAlchemy 2.0 风格（`select()` + `execute()`）
-- 数据库连接通过环境变量配置
-- 支持多数据库方言（SQLite 开发，PostgreSQL 生产）
+- 数据库连接通过 `config.yaml` 或环境变量注入，一行不改代码切换库
+- 支持多数据库方言（SQLite 开发，PostgreSQL/MySQL/MSSQL 生产），prompt 自动注入目标库方言规则，SQL 输出后校验方言兼容性
+- 启动时自动扫描 `information_schema` 生成表/字段/关系摘要，向量化存入本地索引供 LLM 检索，表结构零硬编码
+
+## 自进化记忆
+
+- 记忆模型字段：`original_question`, `original_sql`, `user_feedback`, `corrected_sql`, `question_embedding`, `scope`（`global`/`schema`/`user`）
+- `scope=schema` 的记忆绑定当前数据库 schema hash，切换数据库后隔离，防止旧库修正污染
+- `scope=global` 的记忆（如 SQL 写法技巧）跨库保留
+- 每次 LLM 生成 SQL 前，用当前问题向量检索 Top-K 相似记忆注入 prompt
