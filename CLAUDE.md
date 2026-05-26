@@ -24,7 +24,7 @@
 ```
 
 - **前端**: React 18 + TypeScript + Vite + ECharts (echarts-for-react)
-- **后端**: Python FastAPI + SQLAlchemy + OpenAI/Anthropic SDK
+- **后端**: Python FastAPI + LangChain + SQLAlchemy + DeepSeek (OpenAI-compatible)
 
 ## 目录结构
 
@@ -63,3 +63,4 @@ pnpm dev                   # 启动开发服务器 (:5173)
 
 - [前端开发说明](./frontend/CLAUDE.md)
 - [后端开发说明](./backend/CLAUDE.md)
+- [部署指南](./DEPLOYMENT.md)

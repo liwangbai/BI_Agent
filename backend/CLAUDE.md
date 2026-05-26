@@ -9,8 +9,8 @@ Python 后端服务，负责接收用户自然语言问题，通过 LLM 生成 S
 | Python 3.11+ | 运行环境 |
 | FastAPI | Web 框架 |
 | Uvicorn | ASGI 服务器 |
+| LangChain + LangChain-OpenAI | TEXT-to-SQL 核心编排 |
 | SQLAlchemy | 数据库 ORM & 连接管理 |
-| OpenAI SDK | LLM 调用 (TEXT-to-SQL 核心) |
 | Pydantic | 数据校验 & 序列化 |
 
 ## 目录结构
@@ -19,10 +19,28 @@ Python 后端服务，负责接收用户自然语言问题，通过 LLM 生成 S
 backend/
 ├── CLAUDE.md              # 本文件
 ├── pyproject.toml         # 项目元数据 & 依赖
+├── .env                   # 环境变量（API Key 等）
 └── app/
     ├── __init__.py
-    └── main.py            # FastAPI 应用入口
+    ├── main.py            # FastAPI 应用入口 + /api/query 路由
+    ├── models.py          # Pydantic 请求/响应模型
+    ├── database.py        # SQLite 样本数据 + LangChain SQLDatabase
+    └── llm.py             # LangChain ChatOpenAI + JSON 输出解析
 ```
+
+## 分层架构
+
+```
+FastAPI 路由层 (main.py)
+       │
+       ▼
+LangChain 编排层 (llm.py)  ← ChatOpenAI + ChatPromptTemplate + JsonOutputParser
+       │
+       ▼
+LangChain 数据库层 (database.py) ← SQLDatabase + SQLAlchemy engine
+```
+
+FastAPI 负责 HTTP 层和模型校验，LangChain 只替换 TEXT→SQL 核心链路，不反噬 Web 层。
 
 ## 开发命令
 
@@ -32,22 +50,25 @@ uvicorn app.main:app --reload --port 8000   # 启动开发服务器
 pytest                               # 运行测试
 ```
 
-## TEXT-to-SQL 处理流程（规划）
+## TEXT-to-SQL 处理流程
 
 ```
 用户输入自然语言
        │
        ▼
-  FastAPI 接收请求
+  FastAPI POST /api/query
        │
        ▼
-  LLM 生成 SQL（含表结构上下文、few-shot 示例）
+  LangChain SQLDatabase.get_table_info() → schema DDL
        │
        ▼
-  SQL 安全校验 & 执行（通过 SQLAlchemy）
+  LangChain ChatOpenAI + JsonOutputParser → {{sql, chart_type}}
        │
        ▼
-  结果格式化 & 返回 JSON
+  SQLAlchemy execute → list[dict]
+       │
+       ▼
+  FastAPI → QueryResponse JSON
 ```
 
 ## API 设计约定
@@ -59,10 +80,10 @@ pytest                               # 运行测试
 
 ## 数据库集成
 
-- 使用 SQLAlchemy 2.0 风格（`select()` + `execute()`）
-- 数据库连接通过 `config.yaml` 或环境变量注入，一行不改代码切换库
-- 支持多数据库方言（SQLite 开发，PostgreSQL/MySQL/MSSQL 生产），prompt 自动注入目标库方言规则，SQL 输出后校验方言兼容性
-- 启动时自动扫描 `information_schema` 生成表/字段/关系摘要，向量化存入本地索引供 LLM 检索，表结构零硬编码
+- 开发阶段使用 SQLite 内存库 + 样本数据
+- 生产环境通过 `SQLDatabase.from_uri(DATABASE_URL)` 一键切换，不改代码
+- 支持多数据库方言（SQLite 开发，PostgreSQL/MySQL/MSSQL 生产），prompt 自动注入目标库方言规则
+- LangChain SQLDatabase 自动扫描表结构，表结构零硬编码
 
 ## 自进化记忆
 
