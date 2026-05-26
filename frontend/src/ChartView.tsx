@@ -9,15 +9,15 @@ interface Props {
 function EmptyState() {
   return (
     <div className="empty-state">
-      <svg className="empty-icon" viewBox="0 0 64 64" width="64" height="64">
-        <rect x="8" y="12" width="48" height="40" rx="4" fill="none" stroke="#d1d5db" strokeWidth="2" />
-        <line x1="8" y1="22" x2="56" y2="22" stroke="#d1d5db" strokeWidth="2" />
-        <circle cx="16" cy="18" r="2" fill="#d1d5db" />
-        <circle cx="24" cy="18" r="2" fill="#d1d5db" />
-        <circle cx="32" cy="18" r="2" fill="#d1d5db" />
-        <rect x="12" y="28" width="30" height="4" rx="2" fill="#e5e7eb" />
-        <rect x="12" y="36" width="24" height="4" rx="2" fill="#e5e7eb" />
-        <rect x="12" y="44" width="18" height="4" rx="2" fill="#e5e7eb" />
+      <svg viewBox="0 0 64 64" width="80" height="80">
+        <rect x="8" y="12" width="48" height="40" rx="4" fill="none" stroke="#cbd5e1" strokeWidth="2" />
+        <line x1="8" y1="22" x2="56" y2="22" stroke="#cbd5e1" strokeWidth="2" />
+        <circle cx="16" cy="18" r="2.5" fill="#cbd5e1" />
+        <circle cx="25" cy="18" r="2.5" fill="#cbd5e1" />
+        <circle cx="34" cy="18" r="2.5" fill="#cbd5e1" />
+        <rect x="12" y="28" width="32" height="5" rx="2.5" fill="#e2e8f0" />
+        <rect x="12" y="37" width="26" height="5" rx="2.5" fill="#e2e8f0" />
+        <rect x="12" y="46" width="20" height="5" rx="2.5" fill="#e2e8f0" />
       </svg>
       <p>查询无结果</p>
     </div>
@@ -60,9 +60,7 @@ export default function ChartView({ result, viewMode }: Props) {
     return <EmptyState />
   }
 
-  // table 类型切到图表视图时，默认用柱状图
   const seriesType = chart_type === 'table' ? 'bar' : chart_type as 'bar' | 'line' | 'pie'
-
   const xCol = columns[0]
   const yCols = columns.slice(1)
 
@@ -72,7 +70,9 @@ export default function ChartView({ result, viewMode }: Props) {
       series: [
         {
           type: 'pie',
-          radius: ['40%', '70%'],
+          radius: ['45%', '75%'],
+          center: ['50%', '55%'],
+          label: { show: true, formatter: '{b}: {d}%' },
           data: data.map((row) => ({
             name: String(row[xCol] ?? ''),
             value: Number(row[yCols[0]]) || 0,
@@ -80,10 +80,9 @@ export default function ChartView({ result, viewMode }: Props) {
         },
       ],
     }
-    return <ReactECharts option={option} style={{ height: 400 }} />
+    return <ReactECharts option={option} style={{ height: 420 }} />
   }
 
-  // 检测多指标量级差异：如果最大值/最小值 > 10，用双 Y 轴
   const yRanges = yCols.map((col) => {
     const vals = data.map((row) => Number(row[col]) || 0)
     return { col, min: Math.min(...vals), max: Math.max(...vals) }
@@ -94,17 +93,17 @@ export default function ChartView({ result, viewMode }: Props) {
 
   const option = {
     tooltip: { trigger: 'axis' as const },
-    legend: yCols.length > 1 ? {} : undefined,
-    grid: { left: '3%', right: useDualAxis ? '8%' : '4%', bottom: '15%', containLabel: true },
+    legend: yCols.length > 1 ? { bottom: 0 } : undefined,
+    grid: { left: '3%', right: useDualAxis ? '8%' : '4%', bottom: yCols.length > 1 ? '12%' : '8%', top: '5%', containLabel: true },
     xAxis: {
       type: 'category' as const,
       data: data.map((row) => String(row[xCol] ?? '')),
-      axisLabel: { rotate: 30 },
+      axisLabel: { rotate: 30, fontSize: 11 },
     },
     yAxis: useDualAxis
       ? [
-          { type: 'value' as const, name: yCols[0] },
-          { type: 'value' as const, name: yCols[1] },
+          { type: 'value' as const, name: yCols[0], nameTextStyle: { fontSize: 11 } },
+          { type: 'value' as const, name: yCols[1], nameTextStyle: { fontSize: 11 } },
         ]
       : { type: 'value' as const },
     series: yCols.map((col, i) => ({
@@ -112,8 +111,9 @@ export default function ChartView({ result, viewMode }: Props) {
       name: col,
       yAxisIndex: useDualAxis ? i : 0,
       data: data.map((row) => Number(row[col]) || 0),
+      barMaxWidth: 40,
     })),
   }
 
-  return <ReactECharts option={option} style={{ height: 400 }} />
+  return <ReactECharts option={option} style={{ height: 420 }} />
 }
