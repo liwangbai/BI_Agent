@@ -1,7 +1,52 @@
-from sqlalchemy import create_engine, text
+import re
+
+from sqlalchemy import create_engine, text, event
 from langchain_community.utilities import SQLDatabase
 
+MAX_ROWS = 1000
+QUERY_TIMEOUT = 10  # 秒
+
 engine = create_engine("sqlite:///:memory:", echo=False)
+
+
+@event.listens_for(engine, "connect")
+def _set_timeout(dbapi_conn, _):
+    """每次连接时设置查询超时。"""
+    dbapi_conn.execute(f"PRAGMA busy_timeout = {QUERY_TIMEOUT * 1000}")
+
+
+FORBIDDEN_KEYWORDS = [
+    "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE",
+    "TRUNCATE", "REPLACE", "GRANT", "REVOKE", "EXEC", "EXECUTE",
+    "ATTACH", "DETACH", "PRAGMA", "VACUUM", "REINDEX",
+]
+
+FORBIDDEN_PATTERN = re.compile(
+    r'\b(' + '|'.join(FORBIDDEN_KEYWORDS) + r')\b',
+    re.IGNORECASE,
+)
+
+MULTI_STATEMENT = re.compile(r';\s*\S')
+
+
+def validate_sql(sql: str) -> str:
+    """校验 SQL 安全性，自动追加 LIMIT。校验失败抛出 ValueError。"""
+    stripped = sql.strip()
+
+    if MULTI_STATEMENT.search(stripped):
+        raise ValueError("禁止执行多条 SQL 语句")
+
+    if FORBIDDEN_PATTERN.search(stripped):
+        match = FORBIDDEN_PATTERN.search(stripped)
+        raise ValueError(f"禁止的 SQL 操作: {match.group(0)}")
+
+    if not re.match(r'\s*SELECT\b', stripped, re.IGNORECASE):
+        raise ValueError("仅允许 SELECT 查询")
+
+    if not re.search(r'\bLIMIT\b', stripped, re.IGNORECASE):
+        sql = f"{stripped.rstrip(';')} LIMIT {MAX_ROWS}"
+
+    return sql
 
 SAMPLE_DATA_SQL = """
 CREATE TABLE customers (
@@ -120,7 +165,10 @@ def get_schema() -> str:
 
 
 def execute_sql(sql: str) -> list[dict]:
+    sql = validate_sql(sql)
     with engine.connect() as conn:
+        conn.execute(text(f"PRAGMA query_timeout = {QUERY_TIMEOUT * 1000}"))
         result = conn.execute(text(sql))
         columns = list(result.keys())
-        return [dict(zip(columns, row)) for row in result.fetchall()]
+        rows = [dict(zip(columns, row)) for row in result.fetchall()]
+        return rows[:MAX_ROWS]
