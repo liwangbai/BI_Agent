@@ -25,7 +25,7 @@ SYSTEM_TEMPLATE = """你是一个 SQL 专家。根据数据库的表结构和用
 {{"sql": "SELECT ...", "chart_type": "bar"}}
 
 当前数据库表结构：
-{schema}"""
+{schema}{memories}"""
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_TEMPLATE),
@@ -36,6 +36,10 @@ parser = JsonOutputParser()
 chain = prompt | llm | parser
 
 
-def generate_sql(question: str, schema: str) -> dict:
-    result = chain.invoke({"question": question, "schema": schema})
+def generate_sql(question: str, schema: str, memories: str = "") -> dict:
+    result = chain.invoke({
+        "question": question,
+        "schema": schema,
+        "memories": memories,
+    })
     return result

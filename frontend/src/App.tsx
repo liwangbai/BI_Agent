@@ -1,6 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ChartView from './ChartView'
-import { query, type QueryResponse } from './api'
+import {
+  query,
+  fetchDbStatus,
+  submitFeedback,
+  type QueryResponse,
+  type DatabaseStatus,
+} from './api'
 import './App.css'
 
 function App() {
@@ -9,12 +15,23 @@ function App() {
   const [result, setResult] = useState<QueryResponse | null>(null)
   const [error, setError] = useState('')
   const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart')
+  const [dbStatus, setDbStatus] = useState<DatabaseStatus | null>(null)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [feedbackText, setFeedbackText] = useState('')
+  const [correctedSql, setCorrectedSql] = useState('')
+  const [feedbackSent, setFeedbackSent] = useState(false)
+
+  useEffect(() => {
+    fetchDbStatus().then(setDbStatus).catch(() => {})
+  }, [])
 
   const handleQuery = async () => {
     if (!question.trim()) return
     setLoading(true)
     setError('')
     setResult(null)
+    setFeedbackOpen(false)
+    setFeedbackSent(false)
     try {
       const res = await query(question)
       setResult(res)
@@ -26,10 +43,27 @@ function App() {
     }
   }
 
+  const handleFeedback = async () => {
+    if (!result || !feedbackText.trim()) return
+    try {
+      await submitFeedback(question, result.sql, feedbackText, correctedSql)
+      setFeedbackSent(true)
+    } catch {
+      setError('反馈提交失败')
+    }
+  }
+
   return (
     <div className="app">
       <header>
         <h1>Text-to-SQL BI Agent</h1>
+        {dbStatus && (
+          <div className="db-badge">
+            {dbStatus.db_type === 'sample'
+              ? `示例数据库 · ${dbStatus.table_count} 张表`
+              : `外部数据库 · ${dbStatus.table_count} 张表`}
+          </div>
+        )}
       </header>
 
       <div className="query-bar">
@@ -72,6 +106,59 @@ function App() {
 
           <div className="chart-area">
             <ChartView result={result} viewMode={viewMode} />
+          </div>
+
+          <div className="feedback-area">
+            {feedbackSent ? (
+              <p className="feedback-done">经验已记录，下次类似问题会参考此修正</p>
+            ) : feedbackOpen ? (
+              <div className="feedback-form">
+                <textarea
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  placeholder="描述哪里不对，例如：应该用 order_date 过滤，不是 created_at"
+                  rows={2}
+                />
+                <textarea
+                  value={correctedSql}
+                  onChange={(e) => setCorrectedSql(e.target.value)}
+                  placeholder="正确的 SQL（选填）"
+                  rows={2}
+                />
+                <div className="feedback-actions">
+                  <button onClick={handleFeedback}>提交反馈</button>
+                  <button
+                    className="cancel"
+                    onClick={() => setFeedbackOpen(false)}
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="feedback-buttons">
+                <button
+                  className="feedback-btn"
+                  onClick={() => {
+                    setFeedbackText('结果正确')
+                    submitFeedback(question, result.sql, '结果正确')
+                    setFeedbackSent(true)
+                  }}
+                >
+                  结果正确
+                </button>
+                <button
+                  className="feedback-btn warn"
+                  onClick={() => {
+                    setFeedbackOpen(true)
+                    setFeedbackText('')
+                    setCorrectedSql('')
+                  }}
+                >
+                  需要纠错
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
